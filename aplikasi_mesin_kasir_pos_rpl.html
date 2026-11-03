@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kencana POS - Aplikasi Kasir Toko Modern</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Phosphor Icons & Font Awesome untuk ikon UI dan Game/Kasir -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        // Konfigurasi Tailwind Custom Theme (Dark Mode & Colors)
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Styles Khusus & Utilities */
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Hide Scrollbar untuk navigasi horizontal */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Optimasi cetak struk */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #receipt-modal-content, #receipt-modal-content * {
+                visibility: visible;
+            }
+            #receipt-modal-content {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                box-shadow: none !important;
+                border: none !important;
+                padding: 0 !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+
+        /* Touch target minimum 44px */
+        .btn-touch {
+            min-height: 44px;
+            min-width: 44px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100 min-h-screen flex flex-col transition-colors duration-200">
+
+    <!-- HEADER / IDENTITAS TOKO -->
+    <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center text-xl font-bold shadow-md">
+                    <i class="fa-solid fa-store"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold leading-tight text-gray-900 dark:text-white">Kencana POS</h1>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">SMK Negeri 2 Cipatujah - XI RPL</p>
+                </div>
+            </div>
+            
+            <!-- Controls Header: Dark Mode & Ringkasan Keranjang Mobile -->
+            <div class="flex items-center space-x-2">
+                <button id="theme-toggle" class="btn-touch p-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition flex items-center justify-center">
+                    <i id="theme-toggle-dark-icon" class="fa-solid fa-moon hidden text-lg"></i>
+                    <i id="theme-toggle-light-icon" class="fa-solid fa-sun hidden text-yellow-400 text-lg"></i>
+                </button>
+                <button onclick="switchTab('cart')" class="md:hidden relative btn-touch p-2.5 rounded-xl bg-brand-50 text-brand-600 dark:bg-gray-700 dark:text-brand-500 font-semibold flex items-center justify-center">
+                    <i class="fa-solid fa-cart-shopping text-lg"></i>
+                    <span id="cart-badge-mobile" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center hidden font-bold">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- KONTEN UTAMA (KASIR, PRODUK, RIWAYAT, KELOLA PRODUK) -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 md:p-6 mb-20 md:mb-6 grid grid-cols-1 md:grid-cols-12 gap-6">
+
+        <!-- SUB-HALAMAN: POS UTAMA (DAFTAR PRODUK + KATALOG) -->
+        <section id="tab-pos" class="tab-content md:col-span-7 lg:col-span-8 flex flex-col space-y-4">
+            
+            <!-- BAR PENCARIAN DAN FILTER KATEGORI -->
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-3">
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <input type="text" id="search-input" placeholder="Cari nama produk..." 
+                           class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none text-sm transition">
+                </div>
+
+                <!-- Pills Filter Kategori -->
+                <div class="flex items-center space-x-2 overflow-x-auto no-scrollbar py-1" id="category-bar">
+                    <!-- Kategori akan di-render secara dinamis lewat JS -->
+                </div>
+            </div>
+
+            <!-- GRID DAFTAR PRODUK (Minimal 12 item) -->
+            <div class="flex-1">
+                <div id="product-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <!-- Kartu Produk di-render dinamis oleh JS -->
+                </div>
+                <div id="no-products-msg" class="hidden text-center py-12 text-gray-500 dark:text-gray-400">
+                    <i class="fa-solid fa-box-open text-4xl mb-2"></i>
+                    <p>Produk tidak ditemukan.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- PANEL KERANJANG & PEMBAYARAN (Di Laptop selalu tampil di kanan, Di Mobile jadi Tab terpisah) -->
+        <section id="tab-cart" class="tab-content hidden md:block md:col-span-5 lg:col-span-4 space-y-4">
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 flex flex-col h-full sticky top-20">
+                <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">
+                    <h2 class="font-bold text-lg flex items-center gap-2">
+                        <i class="fa-solid fa-basket-shopping text-brand-600"></i> Keranjang Belanja
+                    </h2>
+                    <button onclick="clearCart()" class="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1">
+                        <i class="fa-solid fa-trash-can"></i> Kosongkan
+                    </button>
+                </div>
+
+                <!-- DAFTAR ITEM KERANJANG -->
+                <div id="cart-items" class="flex-1 overflow-y-auto max-h-[300px] md:max-h-[350px] my-3 space-y-3 pr-1">
+                    <!-- Item Keranjang di-render via JS -->
+                </div>
+
+                <!-- RINCIAN HITUNGAN HARGA & PEMBAYARAN -->
+                <div class="pt-3 border-t border-gray-100 dark:border-gray-700 space-y-2 text-sm">
+                    <div class="flex justify-between text-gray-600 dark:text-gray-400">
+                        <span>Subtotal</span>
+                        <span id="summary-subtotal" class="font-semibold text-gray-800 dark:text-gray-200">Rp 0</span>
+                    </div>
+
+                    <!-- Diskon Input & Calculation -->
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-gray-600 dark:text-gray-400">Diskon (%)</span>
+                        <input type="number" id="input-discount" min="0" max="100" value="0" onchange="updateCartSummary()"
+                               class="w-20 px-2 py-1 text-right bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg text-sm focus:ring-1 focus:ring-brand-500">
+                    </div>
+
+                    <!-- PPN 11% Toggle -->
+                    <div class="flex items-center justify-between">
+                        <label for="toggle-tax" class="text-gray-600 dark:text-gray-400 cursor-pointer flex items-center gap-2">
+                            <input type="checkbox" id="toggle-tax" onchange="updateCartSummary()" class="rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                            Pajak PPN (11%)
+                        </label>
+                        <span id="summary-tax" class="font-semibold text-gray-800 dark:text-gray-200">Rp 0</span>
+                    </div>
+
+                    <div class="flex justify-between text-base font-bold pt-2 border-t border-dashed border-gray-200 dark:border-gray-700">
+                        <span>Total Bayar</span>
+                        <span id="summary-total" class="text-brand-600 dark:text-brand-500">Rp 0</span>
+                    </div>
+
+                    <!-- Input Pembayaran -->
+                    <div class="pt-2 space-y-2">
+                        <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400">UANG PEMBAYARAN</label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-xs">Rp</span>
+                            <input type="number" id="input-pay-amount" placeholder="0" oninput="calculateChange()"
+                                   class="w-full pl-9 pr-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl font-bold text-lg focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                        </div>
+
+                        <!-- Shortcut Uang pas & Pecahan -->
+                        <div class="flex gap-1 overflow-x-auto py-1">
+                            <button onclick="quickPay('exact')" class="px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-xs rounded-lg font-medium hover:bg-gray-200">Uang Pas</button>
+                            <button onclick="quickPay(10000)" class="px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-xs rounded-lg font-medium hover:bg-gray-200">10rb</button>
+                            <button onclick="quickPay(20000)" class="px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-xs rounded-lg font-medium hover:bg-gray-200">20rb</button>
+                            <button onclick="quickPay(50000)" class="px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-xs rounded-lg font-medium hover:bg-gray-200">50rb</button>
+                            <button onclick="quickPay(100000)" class="px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-xs rounded-lg font-medium hover:bg-gray-200">100rb</button>
+                        </div>
+
+                        <!-- Real-time Kembalian & Notifikasi -->
+                        <div class="p-3 bg-gray-50 dark:bg-gray-900/60 rounded-xl flex justify-between items-center text-sm">
+                            <span class="font-medium">Kembalian:</span>
+                            <span id="summary-change" class="font-bold text-gray-900 dark:text-gray-100">Rp 0</span>
+                        </div>
+                        <p id="pay-warning" class="text-xs text-red-500 font-medium hidden flex items-center gap-1">
+                            <i class="fa-solid fa-circle-exclamation"></i> Uang pembayaran kurang!
+                        </p>
+                    </div>
+
+                    <!-- Tombol Selesaikan Transaksi -->
+                    <button id="btn-checkout" onclick="processCheckout()" disabled
+                            class="w-full btn-touch mt-3 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-brand-500/20">
+                        <i class="fa-solid fa-receipt"></i> Selesaikan Transaksi
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- SUB-HALAMAN: RIWAYAT TRANSAKSI & LAPORAN PENJUALAN -->
+        <section id="tab-history" class="tab-content hidden md:col-span-12 space-y-4">
+            <!-- RINGKASAN LAPORAN PENJUALAN HARIAN -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex items-center space-x-4">
+                    <div class="w-12 h-12 bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 rounded-xl flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-wallet"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 font-medium">Total Pendapatan</p>
+                        <h3 id="report-income" class="text-xl font-bold">Rp 0</h3>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex items-center space-x-4">
+                    <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-receipt"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 font-medium">Jumlah Transaksi</p>
+                        <h3 id="report-count" class="text-xl font-bold">0 Transaksi</h3>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex items-center space-x-4">
+                    <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-xl flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-box font-bold"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 font-medium">Item Terjual</p>
+                        <h3 id="report-items-sold" class="text-xl font-bold">0 Pcs</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABEL DAFTAR RIWAYAT -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                    <h2 class="font-bold text-lg">Riwayat Transaksi</h2>
+                    <button onclick="clearHistory()" class="text-xs text-red-500 hover:text-red-700 font-medium">
+                        Hapus Semua Riwayat
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase text-xs">
+                            <tr>
+                                <th class="px-4 py-3">ID Transaksi</th>
+                                <th class="px-4 py-3">Waktu</th>
+                                <th class="px-4 py-3">Jumlah Item</th>
+                                <th class="px-4 py-3">Total Bayar</th>
+                                <th class="px-4 py-3 text-right">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body" class="divide-y divide-gray-100 dark:divide-gray-700">
+                            <!-- Data Transaksi Dinamis -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- SUB-HALAMAN: KELOLA PRODUK (CRUD) -->
+        <section id="tab-manage" class="tab-content hidden md:col-span-12 space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold">Kelola Data Produk</h2>
+                <button onclick="openProductModal()" class="btn-touch px-4 py-2 bg-brand-600 text-white rounded-xl font-semibold hover:bg-brand-700 flex items-center gap-2">
+                    <i class="fa-solid fa-plus"></i> Tambah Produk Baru
+                </button>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase text-xs">
+                            <tr>
+                                <th class="px-4 py-3">Produk</th>
+                                <th class="px-4 py-3">Kategori</th>
+                                <th class="px-4 py-3">Harga</th>
+                                <th class="px-4 py-3">Stok</th>
+                                <th class="px-4 py-3 text-right">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="manage-products-body" class="divide-y divide-gray-100 dark:divide-gray-700">
+                            <!-- Daftar Produk Lengkap Dinamis -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- NAVIGATION BAR BOTTOM (Mobile Navigation - Khusus Layar Kecil) -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-30 px-2 py-1 shadow-lg">
+        <div class="grid grid-cols-4 gap-1">
+            <button onclick="switchTab('pos')" id="nav-pos" class="btn-touch flex flex-col items-center justify-center text-brand-600 dark:text-brand-500">
+                <i class="fa-solid fa-cash-register text-lg"></i>
+                <span class="text-[10px] font-medium mt-0.5">Kasir</span>
+            </button>
+            <button onclick="switchTab('cart')" id="nav-cart" class="btn-touch flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 relative">
+                <i class="fa-solid fa-cart-shopping text-lg"></i>
+                <span class="text-[10px] font-medium mt-0.5">Keranjang</span>
+                <span id="cart-badge-nav" class="absolute top-1 right-5 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center hidden font-bold">0</span>
+            </button>
+            <button onclick="switchTab('history')" id="nav-history" class="btn-touch flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
+                <i class="fa-solid fa-clock-rotate-left text-lg"></i>
+                <span class="text-[10px] font-medium mt-0.5">Riwayat</span>
+            </button>
+            <button onclick="switchTab('manage')" id="nav-manage" class="btn-touch flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
+                <i class="fa-solid fa-boxes-packing text-lg"></i>
+                <span class="text-[10px] font-medium mt-0.5">Produk</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- MODAL STRUK / PEMBAYARAN SUKSES -->
+    <div id="receipt-modal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+        <div class="bg-white text-gray-900 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto" id="receipt-modal-content">
+            
+            <div class="text-center space-y-1 pb-3 border-b border-gray-200">
+                <div class="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto text-xl mb-1 no-print">
+                    <i class="fa-solid fa-check"></i>
+                </div>
+                <h3 class="font-bold text-xl uppercase tracking-wide">Kopi & Snack Kencana</h3>
+                <p class="text-xs text-gray-500">Jl. Raya Cipatujah No. 42, Tasikmalaya</p>
+                <p class="text-xs text-gray-500" id="receipt-date">01/01/2026 00:00</p>
+                <p class="text-xs text-gray-400 font-mono" id="receipt-id">TRX-0000</p>
+            </div>
+
+            <div class="space-y-2 text-xs" id="receipt-items-list">
+                <!-- Items Struk -->
+            </div>
+
+            <div class="border-t border-dashed border-gray-300 pt-3 space-y-1 text-xs">
+                <div class="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span id="receipt-subtotal">Rp 0</span>
+                </div>
+                <div class="flex justify-between text-gray-500" id="receipt-discount-row">
+                    <span>Diskon:</span>
+                    <span id="receipt-discount">0%</span>
+                </div>
+                <div class="flex justify-between text-gray-500" id="receipt-tax-row">
+                    <span>PPN (11%):</span>
+                    <span id="receipt-tax">Rp 0</span>
+                </div>
+                <div class="flex justify-between font-bold text-sm pt-1 border-t border-gray-200">
+                    <span>TOTAL:</span>
+                    <span id="receipt-total">Rp 0</span>
+                </div>
+                <div class="flex justify-between pt-1">
+                    <span>Bayar:</span>
+                    <span id="receipt-pay">Rp 0</span>
+                </div>
+                <div class="flex justify-between font-semibold">
+                    <span>Kembali:</span>
+                    <span id="receipt-change">Rp 0</span>
+                </div>
+            </div>
+
+            <div class="text-center pt-2 border-t border-gray-200">
+                <p class="text-xs font-medium text-gray-600">*** Terima Kasih Atas Kunjungan Anda ***</p>
+                <p class="text-[10px] text-gray-400 mt-1">Barang yang sudah dibeli tidak dapat ditukar</p>
+            </div>
+
+            <!-- Tombol Aksi Modal (Disembunyikan saat Print) -->
+            <div class="flex gap-2 pt-2 no-print">
+                <button onclick="window.print()" class="flex-1 btn-touch bg-gray-800 text-white rounded-xl text-sm font-semibold hover:bg-gray-900 transition flex items-center justify-center gap-1">
+                    <i class="fa-solid fa-print"></i> Cetak
+                </button>
+                <button onclick="closeReceiptModal()" class="flex-1 btn-touch bg-brand-600 text-white rounded-xl text-sm font-semibold hover:bg-brand-700 transition flex items-center justify-center">
+                    Tutup / Transaksi Baru
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL FORM TAMBAH / EDIT PRODUK (CRUD) -->
+    <div id="product-modal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative space-y-4">
+            <div class="flex justify-between items-center pb-2 border-b border-gray-200 dark:border-gray-700">
+                <h3 id="product-modal-title" class="font-bold text-lg">Tambah Produk</h3>
+                <button onclick="closeProductModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            
+            <form id="product-form" onsubmit="saveProduct(event)" class="space-y-3">
+                <input type="hidden" id="prod-id">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Nama Produk</label>
+                    <input type="text" id="prod-name" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Kategori</label>
+                    <input type="text" id="prod-category" required placeholder="Contoh: Minuman, Makanan" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Harga (Rp)</label>
+                        <input type="number" id="prod-price" min="0" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Stok Awal</label>
+                        <input type="number" id="prod-stock" min="0" required class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Ikon (Emoji / FontAwesome)</label>
+                    <input type="text" id="prod-icon" placeholder="☕ / fa-mug-hot" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500">
+                </div>
+
+                <div class="flex gap-2 pt-3">
+                    <button type="button" onclick="closeProductModal()" class="flex-1 py-2.5 bg-gray-200 dark:bg-gray-700 rounded-xl text-sm font-semibold">Batal</button>
+                    <button type="submit" class="flex-1 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-semibold hover:bg-brand-700">Simpan Produk</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC & STATE MANAGEMENT -->
+    <script>
+        /* ============================================================
+           1. DATA INITIALIZATION & STATE MANAGEMENT
+           ============================================================ */
+        
+        // Produk Default Minimal 12 Produk
+        const initialProducts = [
+            { id: 1, name: "Kopi Gula Aren", price: 15000, category: "Minuman", stock: 25, icon: "☕" },
+            { id: 2, name: "Americano Ice", price: 12000, category: "Minuman", stock: 30, icon: "🧊" },
+            { id: 3, name: "Matcha Latte", price: 18000, category: "Minuman", stock: 15, icon: "🍵" },
+            { id: 4, name: "Teh Tarik Boba", price: 14000, category: "Minuman", stock: 20, icon: "🧋" },
+            { id: 5, name: "Roti Bakar Cokelat", price: 12000, category: "Makanan", stock: 18, icon: "🍞" },
+            { id: 6, name: "French Fries", price: 10000, category: "Cemilan", stock: 40, icon: "🍟" },
+            { id: 7, name: "Nasi Goreng Special", price: 20000, category: "Makanan", stock: 12, icon: "🍳" },
+            { id: 8, name: "Mie Goreng Telur", price: 15000, category: "Makanan", stock: 15, icon: "🍜" },
+            { id: 9, name: "Croissant Butter", price: 16000, category: "Cemilan", stock: 10, icon: "🥐" },
+            { id: 10, name: "Chicken Nuggets", price: 14000, category: "Cemilan", stock: 22, icon: "🍗" },
+            { id: 11, name: "Air Mineral 600ml", price: 4000, category: "Minuman", stock: 50, icon: "💧" },
+            { id: 12, name: "Donat Gula Halus", price: 8000, category: "Cemilan", stock: 14, icon: "🍩" }
+        ];
+
+        // Load State dari localStorage atau fallback
+        let products = JSON.parse(localStorage.getItem('pos_products')) || initialProducts;
+        let history = JSON.parse(localStorage.getItem('pos_history')) || [];
+        let cart = []; // Format: [{ id, product, qty }]
+        let activeCategory = "Semua";
+
+        // Inisialisasi saat window dimuat
+        window.onload = function() {
+            saveProductsToStorage();
+            renderCategories();
+            renderProducts();
+            renderCart();
+            renderHistory();
+            renderManageProducts();
+            setupSearch();
+            initTheme();
+        };
+
+        /* ============================================================
+           2. FORMATTER UTILITIES
+           ============================================================ */
+        function formatRupiah(number) {
+            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(number);
+        }
+
+        function saveProductsToStorage() {
+            localStorage.setItem('pos_products', JSON.stringify(products));
+        }
+
+        function saveHistoryToStorage() {
+            localStorage.setItem('pos_history', JSON.stringify(history));
+        }
+
+        /* ============================================================
+           3. KATALOG & SEARCH PRODUK
+           ============================================================ */
+        function renderCategories() {
+            const categories = ["Semua", ...new Set(products.map(p => p.category))];
+            const container = document.getElementById('category-bar');
+            container.innerHTML = categories.map(cat => `
+                <button onclick="setCategory('${cat}')" 
+                        class="px-4 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                            activeCategory === cat 
+                            ? 'bg-brand-600 text-white shadow-md shadow-brand-500/20' 
+                            : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200'
+                        }">
+                    ${cat}
+                </button>
+            `).join('');
+        }
+
+        function setCategory(cat) {
+            activeCategory = cat;
+            renderCategories();
+            renderProducts();
+        }
+
+        function setupSearch() {
+            document.getElementById('search-input').addEventListener('input', () => renderProducts());
+        }
+
+        function renderProducts() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const grid = document.getElementById('product-grid');
+            const noMsg = document.getElementById('no-products-msg');
+
+            const filtered = products.filter(p => {
+                const matchesCat = activeCategory === "Semua" || p.category === activeCategory;
+                const matchesSearch = p.name.toLowerCase().includes(searchTerm);
+                return matchesCat && matchesSearch;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '';
+                noMsg.classList.remove('hidden');
+                return;
+            }
+            noMsg.classList.add('hidden');
+
+            grid.innerHTML = filtered.map(p => `
+                <div class="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col justify-between transition-all hover:shadow-md">
+                    <div class="text-center py-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl mb-2 text-3xl">
+                        ${p.icon || '📦'}
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-semibold uppercase px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-md">${p.category}</span>
+                        <h3 class="font-bold text-sm text-gray-800 dark:text-gray-100 mt-1 line-clamp-1">${p.name}</h3>
+                        <p class="text-xs text-brand-600 dark:text-brand-400 font-bold mt-0.5">${formatRupiah(p.price)}</p>
+                        <p class="text-[11px] text-gray-400 mt-0.5">Stok: <span class="${p.stock < 5 ? 'text-red-500 font-bold' : ''}">${p.stock}</span></p>
+                    </div>
+                    <button onclick="addToCart(${p.id})" 
+                            ${p.stock <= 0 ? 'disabled' : ''}
+                            class="w-full mt-3 btn-touch py-2 bg-brand-50 hover:bg-brand-100 dark:bg-gray-700 dark:hover:bg-gray-600 text-brand-600 dark:text-brand-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-xs font-bold transition flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-plus text-xs"></i> ${p.stock <= 0 ? 'Habis' : 'Tambah'}
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        /* ============================================================
+           4. MANAGEMENT KERANJANG BELANJA
+           ============================================================ */
+        function addToCart(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product || product.stock <= 0) return;
+
+            const existing = cart.find(item => item.id === productId);
+            if (existing) {
+                if (existing.qty < product.stock) {
+                    existing.qty++;
+                } else {
+                    alert(`Stok ${product.name} tidak mencukupi!`);
+                }
+            } else {
+                cart.push({ id: productId, product: product, qty: 1 });
+            }
+            renderCart();
+        }
+
+        function updateQty(productId, delta) {
+            const item = cart.find(i => i.id === productId);
+            if (!item) return;
+
+            const product = item.product;
+            if (delta > 0 && item.qty >= product.stock) {
+                alert(`Stok ${product.name} maksimal ${product.stock}`);
+                return;
+            }
+
+            item.qty += delta;
+            if (item.qty <= 0) {
+                cart = cart.filter(i => i.id !== productId);
+            }
+            renderCart();
+        }
+
+        function removeFromCart(productId) {
+            cart = cart.filter(i => i.id !== productId);
+            renderCart();
+        }
+
+        function clearCart() {
+            if (cart.length === 0) return;
+            if (confirm("Kosongkan semua item di keranjang?")) {
+                cart = [];
+                renderCart();
+            }
+        }
+
+        function renderCart() {
+            const container = document.getElementById('cart-items');
+            
+            // Badge Counter Mobile & Nav
+            const totalItemsCount = cart.reduce((sum, item) => sum + item.qty, 0);
+            const badgeMobile = document.getElementById('cart-badge-mobile');
+            const badgeNav = document.getElementById('cart-badge-nav');
+            
+            if (totalItemsCount > 0) {
+                badgeMobile.innerText = totalItemsCount;
+                badgeMobile.classList.remove('hidden');
+                badgeNav.innerText = totalItemsCount;
+                badgeNav.classList.remove('hidden');
+            } else {
+                badgeMobile.classList.add('hidden');
+                badgeNav.classList.add('hidden');
+            }
+
+            if (cart.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-10 text-gray-400">
+                        <i class="fa-solid fa-cart-flatbed text-3xl mb-2"></i>
+                        <p class="text-xs">Keranjang masih kosong</p>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = cart.map(item => `
+                    <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900/40 rounded-xl">
+                        <div class="flex-1 pr-2">
+                            <h4 class="text-xs font-bold text-gray-800 dark:text-gray-200 line-clamp-1">${item.product.name}</h4>
+                            <p class="text-[11px] text-gray-500">${formatRupiah(item.product.price)}</p>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                <button onclick="updateQty(${item.id}, -1)" class="w-7 h-7 flex items-center justify-center text-xs text-gray-600 dark:text-gray-300">-</button>
+                                <span class="w-6 text-center text-xs font-bold">${item.qty}</span>
+                                <button onclick="updateQty(${item.id}, 1)" class="w-7 h-7 flex items-center justify-center text-xs text-gray-600 dark:text-gray-300">+</button>
+                            </div>
+                            <button onclick="removeFromCart(${item.id})" class="text-gray-400 hover:text-red-500 p-1">
+                                <i class="fa-solid fa-xmark text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            updateCartSummary();
+        }
+
+        /* ============================================================
+           5. PERHITUNGAN OTOMATIS & PEMBAYARAN
+           ============================================================ */
+        function calculateTotals() {
+            const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.qty), 0);
+            const discountPct = parseFloat(document.getElementById('input-discount').value) || 0;
+            const discountAmount = subtotal * (discountPct / 100);
+            const afterDiscount = subtotal - discountAmount;
+
+            const isTaxActive = document.getElementById('toggle-tax').checked;
+            const taxAmount = isTaxActive ? afterDiscount * 0.11 : 0;
+            
+            const total = afterDiscount + taxAmount;
+
+            return { subtotal, discountPct, discountAmount, taxAmount, total };
+        }
+
+        function updateCartSummary() {
+            const { subtotal, taxAmount, total } = calculateTotals();
+
+            document.getElementById('summary-subtotal').innerText = formatRupiah(subtotal);
+            document.getElementById('summary-tax').innerText = formatRupiah(taxAmount);
+            document.getElementById('summary-total').innerText = formatRupiah(total);
+
+            calculateChange();
+        }
+
+        function calculateChange() {
+            const { total } = calculateTotals();
+            const payAmount = parseFloat(document.getElementById('input-pay-amount').value) || 0;
+            const change = payAmount - total;
+            
+            const changeEl = document.getElementById('summary-change');
+            const warningEl = document.getElementById('pay-warning');
+            const btnCheckout = document.getElementById('btn-checkout');
+
+            if (cart.length > 0 && payAmount >= total && total > 0) {
+                changeEl.innerText = formatRupiah(change);
+                changeEl.className = "font-bold text-green-600 dark:text-green-400";
+                warningEl.classList.add('hidden');
+                btnCheckout.disabled = false;
+            } else {
+                changeEl.innerText = formatRupiah(0);
+                changeEl.className = "font-bold text-gray-900 dark:text-gray-100";
+                
+                if (cart.length > 0 && payAmount > 0 && payAmount < total) {
+                    warningEl.classList.remove('hidden');
+                } else {
+                    warningEl.classList.add('hidden');
+                }
+                btnCheckout.disabled = true;
+            }
+        }
+
+        function quickPay(amount) {
+            const { total } = calculateTotals();
+            if (amount === 'exact') {
+                document.getElementById('input-pay-amount').value = total;
+            } else {
+                document.getElementById('input-pay-amount').value = amount;
+            }
+            calculateChange();
+        }
+
+        /* ============================================================
+           6. PROSES CHECKOUT & STRUK
+           ============================================================ */
+        let currentTransaction = null;
+
+        function processCheckout() {
+            const totals = calculateTotals();
+            const payAmount = parseFloat(document.getElementById('input-pay-amount').value) || 0;
+
+            if (cart.length === 0 || payAmount < totals.total) return;
+
+            // Potong Stok Produk
+            cart.forEach(cartItem => {
+                const prod = products.find(p => p.id === cartItem.id);
+                if (prod) {
+                    prod.stock -= cartItem.qty;
+                }
+            });
+            saveProductsToStorage();
+
+            // Buat Data Transaksi
+            const transaction = {
+                id: 'TRX-' + Date.now().toString().slice(-6),
+                date: new Date().toLocaleString('id-ID'),
+                items: [...cart],
+                totals: totals,
+                payAmount: payAmount,
+                change: payAmount - totals.total
+            };
+
+            history.unshift(transaction);
+            saveHistoryToStorage();
+            currentTransaction = transaction;
+
+            // Tampilkan Struk & Refresh UI
+            showReceiptModal(transaction);
+            cart = [];
+            document.getElementById('input-pay-amount').value = '';
+            renderCart();
+            renderProducts();
+            renderHistory();
+            renderManageProducts();
+        }
+
+        function showReceiptModal(trx) {
+            document.getElementById('receipt-date').innerText = trx.date;
+            document.getElementById('receipt-id').innerText = trx.id;
+
+            const itemsContainer = document.getElementById('receipt-items-list');
+            itemsContainer.innerHTML = trx.items.map(item => `
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="font-semibold">${item.product.name}</p>
+                        <p class="text-[10px] text-gray-500">${item.qty} x ${formatRupiah(item.product.price)}</p>
+                    </div>
+                    <span class="font-medium">${formatRupiah(item.qty * item.product.price)}</span>
+                </div>
+            `).join('');
+
+            document.getElementById('receipt-subtotal').innerText = formatRupiah(trx.totals.subtotal);
+            document.getElementById('receipt-discount').innerText = `${trx.totals.discountPct}% (${formatRupiah(trx.totals.discountAmount)})`;
+            document.getElementById('receipt-tax').innerText = formatRupiah(trx.totals.taxAmount);
+            document.getElementById('receipt-total').innerText = formatRupiah(trx.totals.total);
+            document.getElementById('receipt-pay').innerText = formatRupiah(trx.payAmount);
+            document.getElementById('receipt-change').innerText = formatRupiah(trx.change);
+
+            document.getElementById('receipt-modal').classList.remove('hidden');
+        }
+
+        function closeReceiptModal() {
+            document.getElementById('receipt-modal').classList.add('hidden');
+        }
+
+        /* ============================================================
+           7. RIWAYAT TRANSAKSI & LAPORAN
+           ============================================================ */
+        function renderHistory() {
+            const tbody = document.getElementById('history-table-body');
+            
+            // Hitung Ringkasan Laporan
+            const totalIncome = history.reduce((sum, t) => sum + t.totals.total, 0);
+            const totalItemsSold = history.reduce((sum, t) => sum + t.items.reduce((iSum, item) => iSum + item.qty, 0), 0);
+
+            document.getElementById('report-income').innerText = formatRupiah(totalIncome);
+            document.getElementById('report-count').innerText = `${history.length} Transaksi`;
+            document.getElementById('report-items-sold').innerText = `${totalItemsSold} Pcs`;
+
+            if (history.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-gray-400">Belum ada riwayat transaksi.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = history.map(t => `
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <td class="px-4 py-3 font-mono font-bold text-xs text-brand-600">${t.id}</td>
+                    <td class="px-4 py-3 text-xs text-gray-500">${t.date}</td>
+                    <td class="px-4 py-3 text-xs">${t.items.reduce((s, i) => s + i.qty, 0)} Pcs</td>
+                    <td class="px-4 py-3 font-bold text-xs">${formatRupiah(t.totals.total)}</td>
+                    <td class="px-4 py-3 text-right">
+                        <button onclick='reprintReceipt("${t.id}")' class="px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-xs rounded-lg hover:bg-gray-200">
+                            Struk
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function reprintReceipt(trxId) {
+            const trx = history.find(t => t.id === trxId);
+            if (trx) showReceiptModal(trx);
+        }
+
+        function clearHistory() {
+            if (confirm("Apakah Anda yakin ingin menghapus seluruh riwayat transaksi?")) {
+                history = [];
+                saveHistoryToStorage();
+                renderHistory();
+            }
+        }
+
+        /* ============================================================
+           8. MANAJEMEN CRUD PRODUK
+           ============================================================ */
+        function renderManageProducts() {
+            const tbody = document.getElementById('manage-products-body');
+            tbody.innerHTML = products.map(p => `
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <td class="px-4 py-3 flex items-center space-x-2">
+                        <span class="text-xl">${p.icon || '📦'}</span>
+                        <span class="font-semibold text-xs">${p.name}</span>
+                    </td>
+                    <td class="px-4 py-3 text-xs text-gray-500">${p.category}</td>
+                    <td class="px-4 py-3 text-xs font-bold">${formatRupiah(p.price)}</td>
+                    <td class="px-4 py-3 text-xs font-semibold ${p.stock < 5 ? 'text-red-500' : ''}">${p.stock}</td>
+                    <td class="px-4 py-3 text-right space-x-1">
+                        <button onclick="editProduct(${p.id})" class="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs hover:bg-blue-100">Edit</button>
+                        <button onclick="deleteProduct(${p.id})" class="px-2 py-1 bg-red-50 text-red-600 rounded-lg text-xs hover:bg-red-100">Hapus</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openProductModal(isEdit = false) {
+            document.getElementById('product-modal-title').innerText = isEdit ? "Edit Produk" : "Tambah Produk Baru";
+            document.getElementById('product-modal').classList.remove('hidden');
+        }
+
+        function closeProductModal() {
+            document.getElementById('product-modal').classList.add('hidden');
+            document.getElementById('product-form').reset();
+            document.getElementById('prod-id').value = '';
+        }
+
+        function saveProduct(e) {
+            e.preventDefault();
+            const id = document.getElementById('prod-id').value;
+            const name = document.getElementById('prod-name').value;
+            const category = document.getElementById('prod-category').value;
+            const price = parseFloat(document.getElementById('prod-price').value);
+            const stock = parseInt(document.getElementById('prod-stock').value);
+            const icon = document.getElementById('prod-icon').value || '📦';
+
+            if (id) {
+                // Edit
+                const prod = products.find(p => p.id == id);
+                if (prod) {
+                    prod.name = name;
+                    prod.category = category;
+                    prod.price = price;
+                    prod.stock = stock;
+                    prod.icon = icon;
+                }
+            } else {
+                // Tambah Baru
+                const newProd = {
+                    id: Date.now(),
+                    name, category, price, stock, icon
+                };
+                products.push(newProd);
+            }
+
+            saveProductsToStorage();
+            closeProductModal();
+            renderCategories();
+            renderProducts();
+            renderManageProducts();
+        }
+
+        function editProduct(id) {
+            const p = products.find(prod => prod.id === id);
+            if (!p) return;
+
+            document.getElementById('prod-id').value = p.id;
+            document.getElementById('prod-name').value = p.name;
+            document.getElementById('prod-category').value = p.category;
+            document.getElementById('prod-price').value = p.price;
+            document.getElementById('prod-stock').value = p.stock;
+            document.getElementById('prod-icon').value = p.icon;
+
+            openProductModal(true);
+        }
+
+        function deleteProduct(id) {
+            if (confirm("Yakin ingin menghapus produk ini?")) {
+                products = products.filter(p => p.id !== id);
+                saveProductsToStorage();
+                renderCategories();
+                renderProducts();
+                renderManageProducts();
+            }
+        }
+
+        /* ============================================================
+           9. NAVIGASI TAB & MOBILE RESPONSIVE
+           ============================================================ */
+        function switchTab(tabName) {
+            // Sembunyikan semua tab
+            document.querySelectorAll('.tab-content').forEach(el => {
+                if (!el.classList.contains('md:block')) {
+                    el.classList.add('hidden');
+                }
+            });
+
+            // Sembunyikan tab POS & Cart secara khusus di mobile
+            document.getElementById('tab-pos').classList.add('hidden');
+            document.getElementById('tab-cart').classList.add('hidden');
+            document.getElementById('tab-history').classList.add('hidden');
+            document.getElementById('tab-manage').classList.add('hidden');
+
+            // Tampilkan tab yang dipilih
+            if (tabName === 'pos') {
+                document.getElementById('tab-pos').classList.remove('hidden');
+                // Di desktop, cart juga tampil di samping pos
+                if (window.innerWidth >= 768) {
+                    document.getElementById('tab-cart').classList.remove('hidden');
+                }
+            } else if (tabName === 'cart') {
+                document.getElementById('tab-cart').classList.remove('hidden');
+            } else if (tabName === 'history') {
+                document.getElementById('tab-history').classList.remove('hidden');
+            } else if (tabName === 'manage') {
+                document.getElementById('tab-manage').classList.remove('hidden');
+            }
+
+            // Update UI tombol Bottom Nav Mobile
+            const navIds = ['pos', 'cart', 'history', 'manage'];
+            navIds.forEach(id => {
+                const btn = document.getElementById(`nav-${id}`);
+                if (id === tabName) {
+                    btn.className = "btn-touch flex flex-col items-center justify-center text-brand-600 dark:text-brand-500 font-bold";
+                } else {
+                    btn.className = "btn-touch flex flex-col items-center justify-center text-gray-500 dark:text-gray-400";
+                }
+            });
+        }
+
+        /* ============================================================
+           10. DARK MODE TOGGLE
+           ============================================================ */
+        function initTheme() {
+            const darkIcon = document.getElementById('theme-toggle-dark-icon');
+            const lightIcon = document.getElementById('theme-toggle-light-icon');
+
+            if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+                lightIcon.classList.remove('hidden');
+            } else {
+                document.documentElement.classList.remove('dark');
+                darkIcon.classList.remove('hidden');
+            }
+
+            document.getElementById('theme-toggle').addEventListener('click', function() {
+                darkIcon.classList.toggle('hidden');
+                lightIcon.classList.toggle('hidden');
+
+                if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                } else {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
